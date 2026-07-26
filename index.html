@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI + Automation for PKF-CAP — Your Month-End, Automated</title>
+<style>
+  :root{
+    --plane:#f4f5f7; --surface:#ffffff; --ink:#0e1729; --ink2:#4a5568; --muted:#8a94a6;
+    --line:#e6e9ef; --navy:#0f2a43; --navy2:#1f5c8b; --accent:#0e9f6e; --accentbg:#e7f7f0;
+    --good:#0ca30c; --goodbg:#e9f7e9; --warn:#c98500; --warnbg:#fdf2dc; --crit:#d03b3b; --critbg:#fbeaea;
+    --xero:#13b5ea; --series1:#1f5c8b; --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--plane);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px 64px}
+  header{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:32px 0 28px}
+  .head-in{max-width:1120px;margin:0 auto;padding:0 20px}
+  .brandrow{display:flex;align-items:center;gap:12px;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#bcd7ea;font-weight:600}
+  .brandrow .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(14,159,110,.25)}
+  h1{margin:12px 0 8px;font-size:29px;line-height:1.15;font-weight:700}
+  .sub{margin:0;color:#d5e6f2;font-size:15.5px;max-width:720px}
+  .kpis{display:flex;gap:26px;margin-top:20px;flex-wrap:wrap}
+  .kpi .n{font-size:24px;font-weight:700;color:#fff}
+  .kpi .l{font-size:12px;color:#a9cbe6;text-transform:uppercase;letter-spacing:.07em}
+  /* pipeline */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:22px;margin-top:18px}
+  .card h2{margin:0 0 4px;font-size:19px}
+  .card .lead{margin:0 0 16px;color:var(--ink2);font-size:14px}
+  .pipe{display:flex;gap:0;align-items:stretch;overflow-x:auto;padding:6px 2px 12px}
+  .stage{min-width:104px;flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;padding:0 4px}
+  .stage:not(:last-child)::after{content:"";position:absolute;top:26px;right:-2px;width:calc(100% - 52px);left:calc(50% + 26px);height:2px;background:var(--line)}
+  .stage.done:not(:last-child)::after{background:var(--accent)}
+  .node{width:52px;height:52px;border-radius:14px;background:#eef2f7;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:22px;transition:.3s;z-index:1}
+  .stage.active .node{background:var(--navy);color:#fff;border-color:var(--navy);transform:scale(1.08);box-shadow:0 0 0 5px rgba(31,92,139,.15)}
+  .stage.done .node{background:var(--accentbg);border-color:var(--accent)}
+  .stage .en{font-size:11.5px;font-weight:600;color:var(--ink);margin-top:8px;line-height:1.25}
+  .stage .zh{font-size:11px;color:var(--muted)}
+  .runbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:6px}
+  .btn{background:var(--navy);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:9px;transition:.15s}
+  .btn:hover{background:#0a1f33}.btn:disabled{opacity:.6;cursor:default}
+  .btn .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:none}
+  .btn.loading .spin{display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}
+  .runstat{display:flex;gap:12px;flex-wrap:wrap;margin-left:auto}
+  .rs{border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:150px;background:#fff}
+  .rs.ai{border-color:var(--good);background:var(--goodbg)}
+  .rs .rl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .rs .rv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px}
+  .rs.ai .rv{color:var(--good)}
+  .stagelog{margin-top:12px;background:var(--plane);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--ink2);min-height:44px}
+  .stagelog b{color:var(--ink)}
+  .scale{margin-top:12px;background:var(--accentbg);border:1px solid #bfe6d5;border-radius:10px;padding:11px 14px;font-size:13px;color:#0a6b49;display:none}
+  .scale.show{display:block}
+  /* tabs */
+  .tabs{display:flex;gap:6px;margin:18px 0 0;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:var(--surface);color:var(--ink2);font-weight:600;font-size:13.5px;padding:9px 14px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.15s}
+  .tab:hover{border-color:#c9d2e0}
+  .tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .panel{display:none}.panel.active{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}.runstat{margin-left:0}}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin:12px 0 5px;text-transform:uppercase;letter-spacing:.05em}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff}
+  textarea{resize:vertical;line-height:1.5;font:13px/1.55 ui-monospace,Menlo,Consolas,monospace}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--navy2);box-shadow:0 0 0 3px rgba(31,92,139,.14)}
+  .go{margin-top:14px}
+  .outwrap{background:var(--plane);border:1px solid var(--line);border-radius:12px;min-height:320px;display:flex;flex-direction:column;overflow:hidden}
+  .outbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .outbar .t{font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
+  .timer{font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700;color:var(--good);background:var(--goodbg);padding:3px 9px;border-radius:20px;opacity:0;transition:.2s}
+  .timer.show{opacity:1}
+  .out{padding:14px 16px;font-size:13.5px;color:var(--ink);flex:1;overflow:auto;line-height:1.6}
+  .placeholder{color:var(--muted);font-size:14px;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:30px}
+  .cmp{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .cmp .box{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fff}
+  .cmp .box.ai{border-color:var(--good);background:var(--goodbg)}
+  .cmp .box .cl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .cmp .box .cn{font-size:21px;font-weight:700;margin-top:2px}
+  .cmp .box.ai .cn{color:var(--good)}
+  .cmp .box.man .cn{color:var(--ink2);text-decoration:line-through;text-decoration-color:#cbd2df}
+  .kv{font-size:12.5px;color:var(--ink2);margin-bottom:10px;background:#fff;border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .kv b{color:var(--ink)}
+  table.je{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden;font-size:12.5px}
+  table.je th{background:#f1f5f9;text-align:left;padding:7px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  table.je td{padding:7px 10px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+  table.je td.num{text-align:right}
+  table.je tr.tot td{font-weight:700;border-top:2px solid #d6dee9}
+  .posted{margin-top:10px;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:#0a6b49;background:var(--accentbg);border:1px solid #bfe6d5;border-radius:8px;padding:7px 11px}
+  .xdot{width:16px;height:16px;border-radius:4px;background:var(--xero);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800}
+  .finding{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:10px 13px;margin-bottom:9px;opacity:0;transform:translateX(8px);animation:slidein .4s forwards;background:#fff}
+  @keyframes slidein{to{opacity:1;transform:none}}
+  .finding .fh{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px}
+  .finding .fb{font-size:13px;color:var(--ink2);margin-top:3px}
+  .chip{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px}
+  .f-crit{border-left-color:var(--crit)} .f-crit .chip{background:var(--critbg);color:var(--crit)}
+  .f-warn{border-left-color:var(--warn)} .f-warn .chip{background:var(--warnbg);color:var(--warn)}
+  .f-good{border-left-color:var(--good)} .f-good .chip{background:var(--goodbg);color:var(--good)}
+  .statrow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .stat{flex:1;min-width:110px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .stat .sl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  .stat .sv{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .stat .sd{font-size:12px;font-weight:600;color:var(--good);margin-top:1px}
+  .narr{white-space:pre-wrap;font-size:13px;color:var(--ink);line-height:1.6;margin-top:10px}
+  .cursor{display:inline-block;width:8px;height:15px;background:var(--navy2);margin-left:1px;vertical-align:text-bottom;animation:bl 1s step-end infinite}
+  @keyframes bl{50%{opacity:0}}
+  .hitl{margin-top:14px;background:var(--accentbg);border:1px solid #bfe6d5;border-radius:9px;padding:10px 13px;font-size:12.5px;color:#0a6b49;display:flex;gap:8px;align-items:flex-start}
+  .foot{max-width:1120px;margin:26px auto 0;padding:0 20px;color:var(--muted);font-size:12px;text-align:center}
+  .foot .more{color:var(--ink2);margin-bottom:6px}
+  .pill{display:inline-block;background:var(--accentbg);color:#0a6b49;border:1px solid #bfe6d5;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-in">
+    <div class="brandrow"><span class="dot"></span> AI + Automation · Proof of Concept for PKF-CAP Corporate Services</div>
+    <h1>Your BK → FR → MA month-end, run in minutes.</h1>
+    <p class="sub">Built around PKF-CAP's own workflow — collect → categorise → journal → Xero/QBO → reconcile → MA pack → client → close → XBRL, plus payroll on Employment Hero. Watch each step the way your team does it today, then the same step with AI + automation.</p>
+    <div class="kpis">
+      <div class="kpi"><div class="n">~10.5 hrs</div><div class="l">Saved / client / month</div></div>
+      <div class="kpi"><div class="n">Xero · QBO</div><div class="l">Employment Hero · XBRL</div></div>
+      <div class="kpi"><div class="n">100%</div><div class="l">Reviewed by your team</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- PIPELINE -->
+  <div class="card">
+    <h2>The month-end pipeline — end to end</h2>
+    <p class="lead">This is your Sheet-1 flow. Press play: AI runs each stage in sequence, a person only approves. Watch the two clocks.</p>
+    <div class="pipe" id="pipe"></div>
+    <div class="runbar">
+      <button class="btn" id="run-btn" onclick="runPipe()"><span class="spin"></span><span>▶ Run one client's month-end</span></button>
+      <div class="runstat">
+        <div class="rs man"><div class="rl">Manual — your team</div><div class="rv" id="man-clock">0h 00m</div></div>
+        <div class="rs ai"><div class="rl">With AI + automation</div><div class="rv" id="ai-clock">0h 00m</div></div>
+      </div>
+    </div>
+    <div class="stagelog" id="stagelog">Press <b>Run</b> to step through collect → categorise → journal → Xero/QBO → reports → reconciliation → MA pack → queries → close → XBRL.</div>
+    <div class="scale" id="scale"></div>
+  </div>
+
+  <!-- DEEP DIVE TABS -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="book"><span>📑</span> Bookkeeping → Xero/QBO</button>
+    <button class="tab" data-tab="recon"><span>🔁</span> Reconciliation</button>
+    <button class="tab" data-tab="ma"><span>📊</span> MA reporting pack</button>
+    <button class="tab" data-tab="pay"><span>👥</span> Payroll / CPF</button>
+    <button class="tab" data-tab="xbrl"><span>🧾</span> Close &amp; XBRL</button>
+  </div>
+
+  <!-- BOOKKEEPING -->
+  <div class="card panel active" id="p-book">
+    <h2>Bookkeeping — source document to posted journal</h2>
+    <p class="lead">收集资料 → 分类账 → 分录 → 记账. A supplier invoice comes in; AI extracts it, categorises to your chart of accounts, and posts a draft bill/journal straight into Xero or QBO.</p>
+    <div class="grid">
+      <div>
+        <label>Supplier invoice / receipt (from client)</label>
+        <textarea id="bk-in" rows="12">TAX INVOICE
+Supplier: Tech Supplies Pte Ltd  (GST Reg: 200812345M)
+Invoice No: TS-8842   Date: 12 Jun 2026
+Bill to: ABC Trading Pte Ltd (client of PKF-CAP)
+
+Description: 3 x Laptop — office use
+Subtotal:        SGD 6,000.00
+GST @ 9%:        SGD   540.00
+Total payable:   SGD 6,540.00
+Terms: 30 days</textarea>
+        <label>Post to</label>
+        <select id="bk-dest"><option>Xero</option><option>QuickBooks Online</option></select>
+        <button class="btn go" id="bk-btn" onclick="runBook()"><span class="spin"></span><span>⚡ Categorise &amp; post</span></button>
+        <div class="cmp">
+          <div class="box man"><div class="cl">Manual</div><div class="cn">~8 min</div></div>
+          <div class="box ai"><div class="cl">With AI</div><div class="cn">3 sec</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="outwrap">
+          <div class="outbar"><span class="t">Proposed journal + posting</span><span class="timer" id="bk-badge">✓ 2.6s</span></div>
+          <div class="out" id="bk-out"><div class="placeholder">Extracted fields, journal and Xero/QBO posting appear here.</div></div>
+        </div>
+        <div class="hitl">🔒 <span><b>Human-in-the-loop:</b> posted as a <b>draft</b> in Xero/QBO — your bookkeeper approves before it's finalised.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECON -->
+  <div class="card panel" id="p-recon">
+    <h2>Bank reconciliation &amp; detailed schedules (明细表 / Recon.)</h2>
+    <p class="lead">AI pulls the GL from Xero/QBO and the bank feed, matches them, and flags what needs a human — unmatched items, duplicates, bank charges, timing differences — with a suggested entry for each.</p>
+    <div class="grid">
+      <div>
+        <label>Bank statement lines</label>
+        <textarea id="rc-in" rows="12">Date     Description                    Amount (SGD)
+02 Jun  Receipt - ABC Trading            +9,000.00
+05 Jun  GIRO - Tech Supplies TS-8842     -6,540.00
+09 Jun  Receipt - ABC Trading            +9,000.00
+18 Jun  Bank service charge              -   38.00
+27 Jun  Cheque 100482 - Delta Trust      +4,200.00
+30 Jun  FX inward - HK remittance        +12,880.00</textarea>
+        <button class="btn go" id="rc-btn" onclick="runRecon()"><span class="spin"></span><span>⚡ Reconcile</span></button>
+        <div class="cmp">
+          <div class="box man"><div class="cl">Manual</div><div class="cn">~2 hrs</div></div>
+          <div class="box ai"><div class="cl">With AI</div><div class="cn">5 sec</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="outwrap">
+          <div class="outbar"><span class="t">Reconciliation result</span><span class="timer" id="rc-badge">✓ 4.7s</span></div>
+          <div class="out" id="rc-out"><div class="placeholder">Matched items and exceptions appear here.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MA -->
+  <div class="card panel" id="p-ma">
+    <h2>MA / Reporting Package (Excel / PDF)</h2>
+    <p class="lead">Pull the trial balance from Xero/QBO → AI builds the management-accounts pack with figures, chart and plain-English commentary, ready to send to the client. Runs on a schedule at month-end.</p>
+    <div class="grid">
+      <div>
+        <label>Client / entity</label>
+        <select id="ma-client"><option>ABC Trading Pte Ltd</option><option>Delta Trust Pte Ltd</option></select>
+        <label>Period</label>
+        <select><option>June 2026 (month-end)</option><option>Q2 2026</option></select>
+        <button class="btn go" id="ma-btn" onclick="runMA()"><span class="spin"></span><span>⚡ Generate MA pack</span></button>
+        <div class="cmp">
+          <div class="box man"><div class="cl">Manual</div><div class="cn">~3 hrs</div></div>
+          <div class="box ai"><div class="cl">With AI</div><div class="cn">6 sec</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="outwrap">
+          <div class="outbar"><span class="t">Management accounts</span><span class="timer" id="ma-badge">✓ 5.6s</span></div>
+          <div class="out" id="ma-out"><div class="placeholder">Figures, chart and commentary build here.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYROLL -->
+  <div class="card panel" id="p-pay">
+    <h2>Payroll — CPF calculation check (Employment Hero)</h2>
+    <p class="lead">资料 → Employment Hero → 计算 (CPF) → 检查、确认. AI recomputes CPF from the pay data, checks it against the rules, and flags anything off before the client confirms and pays.</p>
+    <div class="grid">
+      <div>
+        <label>Payroll run — June 2026</label>
+        <textarea id="py-in" rows="12">Employee: Tan Wei Ming (Singapore Citizen, age 34)
+Gross wage (June):        SGD 5,000
+Employer CPF shown:       SGD   850
+Employee CPF shown:       SGD 1,000
+---
+Employee: Rajan K. (PR, 3rd year, age 45)
+Gross wage (June):        SGD 4,000
+Employer CPF shown:       SGD   680
+Employee CPF shown:       SGD   800
+Payment date: 30 Jun 2026</textarea>
+        <button class="btn go" id="py-btn" onclick="runPay()"><span class="spin"></span><span>⚡ Check payroll</span></button>
+        <div class="cmp">
+          <div class="box man"><div class="cl">Manual</div><div class="cn">~50 min</div></div>
+          <div class="box ai"><div class="cl">With AI</div><div class="cn">4 sec</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="outwrap">
+          <div class="outbar"><span class="t">CPF &amp; payroll check</span><span class="timer" id="py-badge">✓ 3.6s</span></div>
+          <div class="out" id="py-out"><div class="placeholder">CPF recomputation and flags appear here.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- XBRL -->
+  <div class="card panel" id="p-xbrl">
+    <h2>Close, data check &amp; XBRL e-filing (结账 → 数据检查 → XBRL)</h2>
+    <p class="lead">At close, AI runs the data checks, maps the financial statements to the ACRA XBRL taxonomy, pre-fills the return, and lists every filing deadline it can auto-track.</p>
+    <div class="grid">
+      <div>
+        <label>Financial statements — FY2026 (SGD)</label>
+        <textarea id="xb-in" rows="12">Entity: ABC Trading Pte Ltd (SG, active, revenue < 500K exempt? No)
+Revenue:                      1,820,000
+Profit before tax:              420,000
+Total assets:                 2,150,000
+Total liabilities:              930,000
+Share capital:                  100,000
+FYE: 31 Dec 2026 · GST quarterly · not dormant
+One related-party loan to director: 120,000 (not disclosed in draft)</textarea>
+        <button class="btn go" id="xb-btn" onclick="runXbrl()"><span class="spin"></span><span>⚡ Check &amp; map to XBRL</span></button>
+        <div class="cmp">
+          <div class="box man"><div class="cl">Manual</div><div class="cn">~1.5 hrs</div></div>
+          <div class="box ai"><div class="cl">With AI</div><div class="cn">5 sec</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="outwrap">
+          <div class="outbar"><span class="t">Data check, XBRL map &amp; deadlines</span><span class="timer" id="xb-badge">✓ 4.4s</span></div>
+          <div class="out" id="xb-out"><div class="placeholder">Data-check flags, XBRL tags and filing deadlines appear here.</div></div>
+        </div>
+        <div class="hitl">🔒 <span><b>Human-in-the-loop:</b> a draft for the preparer — the engagement partner reviews before filing to ACRA/IRAS.</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="foot">
+  <div class="more">Runs on n8n (self-hosted) as the automation backbone + an LLM (Claude / GPT-4o) as the brain, connected to Xero, QuickBooks Online and Employment Hero. BPO across AP · AR · Payroll · Consolidation.</div>
+  Interactive proof-of-concept for PKF-CAP · simulated AI responses for demonstration · <span class="pill">no client data leaves this page</span>
+</div>
+
+<script>
+/* ---------- pipeline ---------- */
+const STAGES=[
+  {ic:'📥',en:'Collect data',zh:'收集资料',man:20,log:'Client drops invoices, receipts &amp; bank statements into a shared inbox/folder → auto-ingested.'},
+  {ic:'🗂️',en:'Categorise / GL',zh:'分类账',man:90,log:'AI reads each document and assigns the correct GL account &amp; GST treatment from your chart of accounts.'},
+  {ic:'✍️',en:'Journal entries',zh:'分录',man:60,log:'Double-entry journals drafted automatically, balanced, with references.'},
+  {ic:'📗',en:'Post to Xero/QBO',zh:'记账',man:45,log:'Draft bills &amp; journals pushed into Xero / QuickBooks Online via API — a bookkeeper approves.'},
+  {ic:'📄',en:'Reports / GL',zh:'报表',man:20,log:'Trial balance &amp; GL pulled back from Xero/QBO into the working file.'},
+  {ic:'🔁',en:'Reconcile',zh:'明细表',man:120,log:'Bank vs ledger matched; unmatched, duplicates &amp; timing differences flagged with fixes.'},
+  {ic:'📊',en:'MA pack',zh:'MA',man:180,log:'Management-accounts pack (Excel/PDF) generated with variance analysis &amp; commentary.'},
+  {ic:'💬',en:'Queries',zh:'答疑',man:60,log:'Client questions drafted with answers grounded in the numbers, for a reviewer to send.'},
+  {ic:'🔒',en:'Close',zh:'结账',man:30,log:'Month-end close checklist run; data-check exceptions surfaced.'},
+  {ic:'🧾',en:'XBRL / file',zh:'报 / XBRL',man:90,log:'FS mapped to ACRA XBRL taxonomy, return pre-filled; ECI/GST/Form C-S deadlines tracked.'}
+];
+const AI_MIN=[1,4,3,3,1,5,6,4,2,5]; // AI minutes incl. human review per stage
+const pipe=document.getElementById('pipe');
+STAGES.forEach((s,i)=>{
+  const d=document.createElement('div'); d.className='stage'; d.id='st-'+i;
+  d.innerHTML=`<div class="node">${s.ic}</div><div class="en">${s.en}</div><div class="zh">${s.zh}</div>`;
+  pipe.appendChild(d);
+});
+function fmt(m){const h=Math.floor(m/60),mm=Math.round(m%60);return h+'h '+String(mm).padStart(2,'0')+'m';}
+let manCum=0,aiCum=0;
+function runPipe(){
+  const btn=document.getElementById('run-btn'); btn.classList.add('loading'); btn.disabled=true;
+  document.querySelectorAll('.stage').forEach(s=>s.classList.remove('active','done'));
+  manCum=0;aiCum=0; document.getElementById('man-clock').textContent='0h 00m'; document.getElementById('ai-clock').textContent='0h 00m';
+  document.getElementById('scale').classList.remove('show');
+  let i=0;
+  function step(){
+    if(i>0){document.getElementById('st-'+(i-1)).classList.remove('active');document.getElementById('st-'+(i-1)).classList.add('done');}
+    if(i>=STAGES.length){
+      btn.classList.remove('loading'); btn.disabled=false;
+      document.getElementById('stagelog').innerHTML='<b>Done.</b> Month-end for one client: your team ~'+fmt(manCum)+' of hands-on work → with AI ~'+fmt(aiCum)+', mostly review &amp; approval.';
+      const sc=document.getElementById('scale'); sc.classList.add('show');
+      sc.innerHTML='📈 <b>Scaled across your book:</b> at ~'+fmt(manCum)+' saved per client/month, a portfolio of 40 clients frees roughly <b>'+Math.round((manCum-aiCum)/60*40)+' hours a month</b> — capacity to take on more clients without more headcount.';
+      return;
+    }
+    const st=document.getElementById('st-'+i); st.classList.add('active');
+    const s=STAGES[i];
+    manCum+=s.man; aiCum+=AI_MIN[i];
+    document.getElementById('man-clock').textContent=fmt(manCum);
+    document.getElementById('ai-clock').textContent=fmt(aiCum);
+    document.getElementById('stagelog').innerHTML='<b>'+s.en+' ('+s.zh+')</b> — '+s.log;
+    i++; setTimeout(step,760);
+  }
+  step();
+}
+
+/* ---------- tabs ---------- */
+document.getElementById('tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(!b)return;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  b.classList.add('active'); document.getElementById('p-'+b.dataset.tab).classList.add('active');});
+function setLoading(id,on){const b=document.getElementById(id);b.classList.toggle('loading',on);b.disabled=on;}
+function showBadge(id){document.getElementById(id).classList.add('show');}
+function typeInto(el,text,done){el.innerHTML='';let i=0;const c=document.createElement('span');c.className='cursor';el.appendChild(c);
+  const iv=setInterval(()=>{i+=6;c.insertAdjacentText('beforebegin',text.slice(i-6,i));el.scrollTop=el.scrollHeight;
+    if(i>=text.length){clearInterval(iv);c.remove();done&&done();}},14);}
+function stagger(out,items,done){items.forEach((h,i)=>setTimeout(()=>{const d=document.createElement('div');d.innerHTML=h;out.appendChild(d.firstElementChild);out.scrollTop=out.scrollHeight;if(i===items.length-1)done&&done();},i*360));}
+
+/* Bookkeeping */
+function runBook(){setLoading('bk-btn',true);const dest=document.getElementById('bk-dest').value;const out=document.getElementById('bk-out');
+  out.innerHTML='<div class="placeholder">Reading invoice &amp; posting…</div>';
+  setTimeout(()=>{setLoading('bk-btn',false);
+    out.innerHTML=`
+    <div class="kv"><b>Extracted:</b> Tech Supplies Pte Ltd · Inv TS-8842 · 12 Jun 2026 · Net SGD 6,000.00 · GST SGD 540.00 (9%) · Total SGD 6,540.00.<br>Client: <b>ABC Trading</b> · Category: <b>Office equipment (capital &gt; SGD 5,000)</b> · GST: <b>input tax claimable</b>.</div>
+    <table class="je"><thead><tr><th>Account</th><th>GL</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
+      <tr><td>Office Equipment (Fixed Asset)</td><td>1500</td><td class="num">6,000.00</td><td class="num">—</td></tr>
+      <tr><td>GST Input Tax</td><td>2110</td><td class="num">540.00</td><td class="num">—</td></tr>
+      <tr><td>Accounts Payable — Tech Supplies</td><td>2000</td><td class="num">—</td><td class="num">6,540.00</td></tr>
+      <tr class="tot"><td colspan="2">Totals</td><td class="num">6,540.00</td><td class="num">6,540.00</td></tr>
+    </tbody></table>
+    <div class="posted"><span class="xdot">${dest==='Xero'?'X':'Q'}</span> Draft bill posted to <b>${dest}</b> — ref TS-8842, awaiting approval. Added to fixed-asset register &amp; capital-allowance schedule.</div>`;
+    showBadge('bk-badge');},550);}
+
+/* Recon */
+function runRecon(){setLoading('rc-btn',true);const out=document.getElementById('rc-out');
+  out.innerHTML='<div class="placeholder">Matching bank vs ledger…</div>';
+  const items=[
+    '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:12px">6 lines · <b style="color:var(--good)">3 matched</b>, <b style="color:var(--crit)">1 critical</b>, <b style="color:var(--warn)">2 to review</b>.</div>',
+    '<div class="finding f-good"><div class="fh"><span class="chip">Matched</span> GIRO −6,540.00 → Tech Supplies TS-8842</div><div class="fb">Ties to AP bill TS-8842. Cleared.</div></div>',
+    '<div class="finding f-good"><div class="fh"><span class="chip">Matched</span> +9,000.00 (02 Jun) → ABC Trading receipt</div><div class="fb">Applied to sales invoice INV-2040. Cleared.</div></div>',
+    '<div class="finding f-crit"><div class="fh"><span class="chip">Critical</span> Possible duplicate receipt +9,000.00 (09 Jun)</div><div class="fb">Second identical ABC Trading credit with no matching invoice — likely double payment or misposting. Confirm before recognising as income.</div></div>',
+    '<div class="finding f-warn"><div class="fh"><span class="chip">Review</span> Bank charge −38.00 not in books</div><div class="fb">Suggested: Dr Bank Charges (6400) / Cr Bank (1010) SGD 38.00.</div></div>',
+    '<div class="finding f-warn"><div class="fh"><span class="chip">Review</span> Cheque +4,200.00 Delta Trust — timing difference</div><div class="fb">In books 28 Jun; cleared bank 27 Jun. Reconciling item, no action.</div></div>'
+  ];
+  setTimeout(()=>{setLoading('rc-btn',false);out.innerHTML='';stagger(out,items,()=>showBadge('rc-badge'));},550);}
+
+/* MA */
+function runMA(){setLoading('ma-btn',true);const out=document.getElementById('ma-out');
+  out.innerHTML='<div class="placeholder">Pulling trial balance &amp; building the pack…</div>';
+  setTimeout(()=>{setLoading('ma-btn',false);
+    out.innerHTML=`<div class="statrow">
+      <div class="stat"><div class="sl">Revenue</div><div class="sv">$1.42M</div><div class="sd">▲ 6.2% MoM</div></div>
+      <div class="stat"><div class="sl">Net profit</div><div class="sv">$312K</div><div class="sd">22% margin</div></div>
+      <div class="stat"><div class="sl">Receivables</div><div class="sv">$240K</div><div class="sd" style="color:var(--warn)">3 overdue</div></div>
+    </div><div class="narr" id="ma-narr"></div>`;
+    const n=`\nCommentary — June 2026 (ABC Trading)\n\nRevenue reached SGD 1.42M, up 6.2% month-on-month, the fifth straight month of growth; net profit of SGD 312K holds the margin at 22%. Receivables rose to SGD 240K with three invoices past 60 days — two accounts make up 71% of the overdue balance and are flagged for collection. Cash runway ~5.2 months. Recommend chasing the two large overdue accounts before quarter close.\n\nPack exported to Excel + PDF, ready to send to the client.`;
+    setTimeout(()=>typeInto(document.getElementById('ma-narr'),n,()=>showBadge('ma-badge')),350);},550);}
+
+/* Payroll */
+function runPay(){setLoading('py-btn',true);const out=document.getElementById('py-out');
+  out.innerHTML='<div class="placeholder">Recomputing CPF &amp; checking…</div>';
+  const items=[
+    '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:12px">2 employees checked · <b style="color:var(--crit)">1 CPF error</b>, <b style="color:var(--good)">1 OK</b>.</div>',
+    '<div class="finding f-crit"><div class="fh"><span class="chip">Fix</span> Tan Wei Ming — employer CPF understated</div><div class="fb">At SGD 5,000 wage (Citizen, age 34), employer CPF should be 17% = SGD 850 ✓, but employee CPF should be 20% = SGD 1,000 ✓ — total CPF SGD 1,850. Shown figures net out to an under-contribution of SGD 0 on employee but employer rate applied to wrong ceiling. Recompute against the current CPF ceiling before submission.</div></div>',
+    '<div class="finding f-good"><div class="fh"><span class="chip">OK</span> Rajan K. (PR 3rd year)</div><div class="fb">Full rates apply from 3rd year — employer 17% / employee 20%. Figures consistent. No action.</div></div>',
+    '<div class="finding f-warn"><div class="fh"><span class="chip">Note</span> Payment date 30 Jun</div><div class="fb">CPF contribution due by 14th of the following month; e-submission reminder scheduled.</div></div>'
+  ];
+  setTimeout(()=>{setLoading('py-btn',false);out.innerHTML='';stagger(out,items,()=>showBadge('py-badge'));},550);}
+
+/* XBRL */
+function runXbrl(){setLoading('xb-btn',true);const out=document.getElementById('xb-out');
+  out.innerHTML='<div class="placeholder">Running data checks &amp; mapping to XBRL…</div>';
+  setTimeout(()=>{setLoading('xb-btn',false);
+    out.innerHTML=`
+    <div class="kv"><b>XBRL mapping (ACRA taxonomy):</b> Revenue → <i>Revenue</i> 1,820,000 · Profit before tax → <i>ProfitLossBeforeTaxation</i> 420,000 · Total assets → <i>Assets</i> 2,150,000 · Total liabilities → <i>Liabilities</i> 930,000 · Share capital → <i>ShareCapital</i> 100,000. Full set XBRL selected (not exempt).</div>
+    <div id="xb-find"></div>`;
+    const f=document.getElementById('xb-find');
+    const items=[
+      '<div class="finding f-crit"><div class="fh"><span class="chip">Critical</span> Related-party loan not disclosed</div><div class="fb">SGD 120,000 loan to a director is a related-party transaction (SFRS 24) and must be disclosed in the FS and tagged in XBRL before filing.</div></div>',
+      '<div class="finding f-warn"><div class="fh"><span class="chip">Check</span> Balance sheet ties</div><div class="fb">Assets 2,150,000 = Liabilities 930,000 + Equity 1,220,000. Equity = share capital 100,000 + reserves 1,120,000 — confirm reserves roll-forward.</div></div>',
+      '<div class="finding f-good"><div class="fh"><span class="chip">Deadlines</span> Auto-tracked</div><div class="fb">ECI within 3 months of FYE · GST F5 (Jun qtr) 31 Jul 2026 · Form C-S/C for YA2026 30 Nov 2026 · XBRL + Annual Return within 7 months of FYE. Reminders scheduled.</div></div>'
+    ];
+    setTimeout(()=>stagger(f,items,()=>showBadge('xb-badge')),300);},550);}
+</script>
+</body>
+</html>
