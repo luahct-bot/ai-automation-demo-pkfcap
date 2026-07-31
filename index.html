@@ -132,6 +132,7 @@
   @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
   @media(max-width:640px){.exgrid{grid-template-columns:1fr}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 <header>
@@ -196,7 +197,8 @@ GST @ 9%:        SGD   540.00
 Total payable:   SGD 6,540.00
 Terms: 30 days</pre>
           </div>
-          <div class="dropnote"><span id="bk-dropmsg">📄 Drop a PDF invoice here, or <button type="button" class="linkbtn" onclick="scanInvoice()">scan this sample</button></span> <span class="simtag">simulated OCR + AI</span></div>
+          <input type="file" id="bk-file" accept="application/pdf,.pdf" style="display:none" onchange="bkPick(event)">
+          <div class="dropnote"><span id="bk-dropmsg">📄 Drop a PDF invoice here, <button type="button" class="linkbtn" onclick="document.getElementById('bk-file').click()">browse</button>, or <button type="button" class="linkbtn" onclick="scanInvoice()">scan the sample</button></span> <span class="simtag">reads digital PDFs</span></div>
         </div>
         <label>Post to</label>
         <select id="bk-dest"><option>Xero</option><option>QuickBooks Online</option></select>
@@ -401,33 +403,107 @@ function typeInto(el,text,done){el.innerHTML='';let i=0;const c=document.createE
     if(i>=text.length){clearInterval(iv);c.remove();done&&done();}},14);}
 function stagger(out,items,done){items.forEach((h,i)=>setTimeout(()=>{const d=document.createElement('div');d.innerHTML=h;out.appendChild(d.firstElementChild);out.scrollTop=out.scrollHeight;if(i===items.length-1)done&&done();},i*360));}
 
-/* Bookkeeping — simulated OCR + AI extraction */
-function bkDrop(e){e.preventDefault();const d=document.getElementById('bk-drop');d.classList.remove('drag');
-  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
-  document.getElementById('bk-dropmsg').innerHTML=f?('📄 Reading <b>'+f.name+'</b> …'):'📄 Reading invoice …';
-  scanInvoice();}
-function scanInvoice(){setLoading('bk-btn',true);
+/* Bookkeeping — reads REAL text-based PDFs via pdf.js */
+if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';}
+let bkParsed=null;
+const bkMoney=n=>(n==null?'—':'SGD '+Number(n).toLocaleString('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2}));
+const bkFmt=n=>(n?Number(n).toLocaleString('en-SG',{minimumFractionDigits:2,maximumFractionDigits:2}):'—');
+async function extractPdfText(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  let lines=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);const tc=await page.getTextContent();const rows={};
+    tc.items.forEach(it=>{if(!it.str.trim())return;const y=Math.round(it.transform[5]);const x=it.transform[4];(rows[y]=rows[y]||[]).push([x,it.str]);});
+    Object.keys(rows).map(Number).sort((a,b)=>b-a).forEach(y=>{const line=rows[y].sort((a,b)=>a[0]-b[0]).map(o=>o[1]).join(' ').replace(/\s+/g,' ').trim();if(line)lines.push(line);});
+  }
+  return lines.join('\n');
+}
+function parseInvoice(text){
+  const lines=text.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const joined=lines.join('\n');
+  const g=re=>{const m=joined.match(re);return m?m[1].trim():null;};
+  const num=s=>s?parseFloat(s.replace(/,/g,'')):null;
+  let supplier=g(/Supplier\s*:\s*([^\n(]+?)(?:\(|GST|\n|$)/i);
+  if(supplier)supplier=supplier.replace(/\s+GST.*/i,'').trim();
+  if(!supplier){supplier=(lines.find(l=>l&&!/^tax invoice$/i.test(l))||'').replace(/\s+TAX\s+INVOICE.*/i,'').replace(/\s{2,}.*$/,'').trim();}
+  const invoiceNo=g(/Invoice\s*No\.?\s*:?\s*([A-Za-z0-9\-\/]+)/i);
+  const date=g(/Invoice\s*Date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,}\s+[0-9]{4})/i)||g(/Date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,}\s+[0-9]{4})/i);
+  const gstReg=g(/GST\s*Reg(?:\s*No)?\.?\s*:?\s*([0-9A-Za-z]+)/i);
+  const net=num(g(/Subtotal[^0-9\-]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
+  const gst=num(g(/GST\s*@\s*[\d.]+\s*%[^0-9\-]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
+  let total=num(g(/\bTotal\s*(?:payable|due)?[^0-9\-a-z]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
+  let billTo=g(/Bill\s*to\s*:\s*([^\n(]+?)(?:\(|Invoice|Date|\n|$)/i);
+  if(billTo)billTo=billTo.trim();
+  if(!billTo){const bi=lines.findIndex(l=>/^bill\s*to\b/i.test(l));if(bi>=0){let nl=lines[bi+1]||'';billTo=nl.replace(/\s+(Invoice|Date|Payment|Due|GST|Terms).*$/i,'').replace(/\s{2,}.*$/,'').trim();}}
+  let desc=g(/Description\s*:\s*(.+)/i);
+  if(desc&&/qty|unit price|amount/i.test(desc))desc=null;
+  if(!desc){const dh=lines.findIndex(l=>/description/i.test(l));if(dh>=0){for(let i=dh+1;i<lines.length;i++){let l=lines[i];if(/model:|standard-rated/i.test(l))continue;if(/[A-Za-z]{3}/.test(l)){desc=l.replace(/(\s+(?:SGD\s*)?[\d,]+(?:\.\d{2})?){1,4}\s*$/,'').trim();break;}}}}
+  if(total==null)total=((net||0)+(gst||0))||null;
+  return {supplier,invoiceNo,date,gstReg,net,gst,total,billTo,desc};
+}
+function categorise(desc,net){
+  const d=(desc||'').toLowerCase();
+  if(/laptop|computer|equipment|furniture|machine|printer|server|hardware/.test(d))
+     return net>=5000?['1500','Office Equipment (Fixed Asset)','capital asset (&gt; SGD 5,000) — capitalised &amp; depreciated']
+                     :['6300','Office Equipment (expense)','low-value — expensed'];
+  if(/\brent\b/.test(d))return['6100','Rent','operating expense'];
+  if(/electric|water|utilit/.test(d))return['6200','Utilities','operating expense'];
+  if(/internet|phone|telecom|mobile/.test(d))return['6250','Telecommunications','operating expense'];
+  if(/cloud|hosting|software|subscription|saas|licen/.test(d))return['6600','IT &amp; Software','operating expense'];
+  if(/courier|freight|delivery|shipping/.test(d))return['6500','Freight &amp; Courier','operating expense'];
+  if(/stationery|supplies/.test(d))return['6400','Office Supplies','operating expense'];
+  if(/consult|professional|audit|legal|\bfee/.test(d))return['6700','Professional Fees','operating expense'];
+  if(/inventory|goods|stock|resale/.test(d))return['5000','Cost of Goods Sold','inventory / COGS'];
+  return['6900','General Expenses','operating expense'];
+}
+function bkPick(e){const f=e.target.files&&e.target.files[0];if(f)loadPdf(f);}
+function bkDrop(e){e.preventDefault();document.getElementById('bk-drop').classList.remove('drag');const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)loadPdf(f);}
+async function loadPdf(f){
+  const msg=document.getElementById('bk-dropmsg');
+  if(!/\.pdf$/i.test(f.name)&&f.type!=='application/pdf'){msg.innerHTML='⚠ Please drop a <b>PDF</b> file.';return;}
+  if(!window.pdfjsLib){msg.innerHTML='⚠ PDF reader still loading — try again in a moment.';return;}
+  msg.innerHTML='📄 Reading <b>'+f.name+'</b> …';
+  try{
+    const text=await extractPdfText(f);
+    if(!text||text.replace(/\s/g,'').length<25){
+      document.getElementById('bk-doc').textContent='[ This PDF has no text layer — it looks like a scanned image or photo. ]';
+      document.getElementById('bk-out').innerHTML='<div class="ocrhead">🖼 <b>Scanned image PDF</b></div><div class="kv">No text layer found, so there is nothing to read directly. Reading photos / scans needs the <b>vision-AI model</b> — that is the pilot build. Drop a <b>digital</b> (text) PDF here to see live extraction.</div>';
+      msg.innerHTML='📄 Drop a PDF invoice here, <button type="button" class="linkbtn" onclick="document.getElementById(\'bk-file\').click()">browse</button>, or <button type="button" class="linkbtn" onclick="scanInvoice()">scan the sample</button>';
+      return;
+    }
+    document.getElementById('bk-doc').textContent=text;
+    scanInvoice(text);
+  }catch(err){msg.innerHTML='⚠ Could not read that PDF: '+(err&&err.message||err);}
+}
+function scanInvoice(textArg){setLoading('bk-btn',true);
   const wrap=document.getElementById('bk-docwrap');const out=document.getElementById('bk-out');
-  wrap.classList.remove('scanned');out.innerHTML='<div class="placeholder">📸 Scanning PDF · OCR reading the page…</div>';
+  const text=(typeof textArg==='string')?textArg:document.getElementById('bk-doc').textContent;
+  bkParsed=parseInvoice(text);
+  wrap.classList.remove('scanned');out.innerHTML='<div class="placeholder">📸 Reading the PDF text layer…</div>';
   void wrap.offsetWidth;wrap.classList.add('scanning');
   setTimeout(()=>{wrap.classList.remove('scanning');wrap.classList.add('scanned');
-    const fields=[['Supplier','Tech Supplies Pte Ltd','99%'],['Invoice No','TS-8842','99%'],['Date','12 Jun 2026','98%'],['Net','SGD 6,000.00','99%'],['GST 9%','SGD 540.00','99%'],['Total','SGD 6,540.00','99%']];
-    out.innerHTML='<div class="ocrhead">🔍 <b>AI read the invoice</b> — fields detected from the PDF:</div><div class="exgrid" id="bk-ex"></div>';
+    const p=bkParsed;
+    const fields=[['Supplier',p.supplier||'—'],['Invoice No',p.invoiceNo||'—'],['Date',p.date||'—'],['Bill to',p.billTo||'—'],['Net',bkMoney(p.net)],['GST',bkMoney(p.gst)],['Total',bkMoney(p.total)]];
+    out.innerHTML='<div class="ocrhead">🔍 <b>AI read the invoice</b> — fields extracted from the PDF:</div><div class="exgrid" id="bk-ex"></div>';
     const ex=document.getElementById('bk-ex');
-    fields.forEach((f,i)=>setTimeout(()=>{const d=document.createElement('div');d.className='exf';d.innerHTML='<span class="exk">'+f[0]+'</span><span class="exv">'+f[1]+'</span><span class="exc">'+f[2]+' ✓</span>';ex.appendChild(d);},i*170));
-    setTimeout(postJournal,fields.length*170+450);
-  },1550);}
-function postJournal(){const dest=document.getElementById('bk-dest').value;const out=document.getElementById('bk-out');
+    fields.forEach((f,i)=>setTimeout(()=>{const d=document.createElement('div');d.className='exf';d.innerHTML='<span class="exk">'+f[0]+'</span><span class="exv">'+f[1]+'</span><span class="exc">✓</span>';ex.appendChild(d);},i*150));
+    setTimeout(postJournal,fields.length*150+400);
+  },1300);}
+function postJournal(){const dest=document.getElementById('bk-dest').value;const out=document.getElementById('bk-out');const p=bkParsed||{};
+  const net=p.net||0,gst=p.gst||0,total=(p.total!=null)?p.total:(net+gst);
+  const cat=categorise(p.desc,net);const supplier=p.supplier||'Supplier';
+  let rows='<tr><td>'+cat[1]+'</td><td>'+cat[0]+'</td><td class="num">'+bkFmt(net)+'</td><td class="num">—</td></tr>';
+  if(gst>0)rows+='<tr><td>GST Input Tax</td><td>2110</td><td class="num">'+bkFmt(gst)+'</td><td class="num">—</td></tr>';
+  rows+='<tr><td>Accounts Payable — '+supplier+'</td><td>2000</td><td class="num">—</td><td class="num">'+bkFmt(total)+'</td></tr>';
   const b=document.createElement('div');
   b.innerHTML=`
-    <div class="kv" style="margin-top:12px"><b>AI categorisation:</b> client <b>ABC Trading</b> · <b>Office equipment (capital &gt; SGD 5,000)</b> → Fixed Assets · GST <b>input tax claimable</b>.</div>
+    <div class="kv" style="margin-top:12px"><b>AI categorisation:</b> ${p.desc?('"'+p.desc+'" → '):''}<b>${cat[1]} (${cat[0]})</b> · ${cat[2]}. GST ${gst>0?'<b>input tax claimable</b>':'not charged'}.</div>
     <table class="je"><thead><tr><th>Account</th><th>GL</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
-      <tr><td>Office Equipment (Fixed Asset)</td><td>1500</td><td class="num">6,000.00</td><td class="num">—</td></tr>
-      <tr><td>GST Input Tax</td><td>2110</td><td class="num">540.00</td><td class="num">—</td></tr>
-      <tr><td>Accounts Payable — Tech Supplies</td><td>2000</td><td class="num">—</td><td class="num">6,540.00</td></tr>
-      <tr class="tot"><td colspan="2">Totals</td><td class="num">6,540.00</td><td class="num">6,540.00</td></tr>
+      ${rows}
+      <tr class="tot"><td colspan="2">Totals</td><td class="num">${bkFmt(net+gst)}</td><td class="num">${bkFmt(total)}</td></tr>
     </tbody></table>
-    <div class="posted"><span class="xdot">${dest==='Xero'?'X':'Q'}</span> Draft bill posted to <b>${dest}</b> — ref TS-8842, awaiting approval. Added to fixed-asset register &amp; capital-allowance schedule.</div>`;
+    <div class="posted"><span class="xdot">${dest==='Xero'?'X':'Q'}</span> Draft bill posted to <b>${dest}</b>${p.invoiceNo?(' — ref '+p.invoiceNo):''}, awaiting approval.</div>`;
   out.appendChild(b);showBadge('bk-badge');setLoading('bk-btn',false);}
 
 /* Recon */
