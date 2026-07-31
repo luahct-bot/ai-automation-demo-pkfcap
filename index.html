@@ -420,26 +420,32 @@ async function extractPdfText(file){
   return lines.join('\n');
 }
 function parseInvoice(text){
-  const lines=text.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const lines=text.split('\n').map(l=>l.replace(/[ \t]+/g,' ').trim()).filter(Boolean);
   const joined=lines.join('\n');
   const g=re=>{const m=joined.match(re);return m?m[1].trim():null;};
-  const num=s=>s?parseFloat(s.replace(/,/g,'')):null;
+  const amtFromLine=line=>{if(!line)return null;const s=line.replace(/\s+/g,'');const m=s.match(/(\d[\d,]*\.\d{2})/);return m?parseFloat(m[1].replace(/,/g,'')):null;};
+  const hasAmt=l=>l&&/\d\.\d{2}/.test(l.replace(/\s+/g,''));
   let supplier=g(/Supplier\s*:\s*([^\n(]+?)(?:\(|GST|\n|$)/i);
   if(supplier)supplier=supplier.replace(/\s+GST.*/i,'').trim();
   if(!supplier){supplier=(lines.find(l=>l&&!/^tax invoice$/i.test(l))||'').replace(/\s+TAX\s+INVOICE.*/i,'').replace(/\s{2,}.*$/,'').trim();}
   const invoiceNo=g(/Invoice\s*No\.?\s*:?\s*([A-Za-z0-9\-\/]+)/i);
   const date=g(/Invoice\s*Date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,}\s+[0-9]{4})/i)||g(/Date\s*:?\s*([0-9]{1,2}\s+[A-Za-z]{3,}\s+[0-9]{4})/i);
   const gstReg=g(/GST\s*Reg(?:\s*No)?\.?\s*:?\s*([0-9A-Za-z]+)/i);
-  const net=num(g(/Subtotal[^0-9\-]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
-  const gst=num(g(/GST\s*@\s*[\d.]+\s*%[^0-9\-]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
-  let total=num(g(/\bTotal\s*(?:payable|due)?[^0-9\-a-z]*(?:SGD)?\s*([\d,]+\.\d{2})/i));
+  let net=amtFromLine(lines.find(l=>/subtotal/i.test(l)))||amtFromLine(lines.find(l=>/\bnet\b/i.test(l)&&hasAmt(l)));
+  let total=amtFromLine(lines.find(l=>/\btotal\b/i.test(l)&&!/subtotal/i.test(l)&&hasAmt(l)));
+  let gst=null;
+  const gi=lines.findIndex(l=>(/GST\s*@/i.test(l)||(/\bGST\b/i.test(l)&&/%/.test(l)))&&!/reg/i.test(l));
+  if(gi>=0){for(const j of [gi,gi-1,gi+1]){const v=amtFromLine(lines[j]);if(v!=null&&v!==net&&v!==total){gst=v;break;}}}
+  if(gst==null&&net!=null&&total!=null)gst=Math.round((total-net)*100)/100;
+  if(net==null&&total!=null&&gst!=null)net=Math.round((total-gst)*100)/100;
+  if(total==null)total=((net||0)+(gst||0))||null;
   let billTo=g(/Bill\s*to\s*:\s*([^\n(]+?)(?:\(|Invoice|Date|\n|$)/i);
   if(billTo)billTo=billTo.trim();
   if(!billTo){const bi=lines.findIndex(l=>/^bill\s*to\b/i.test(l));if(bi>=0){let nl=lines[bi+1]||'';billTo=nl.replace(/\s+(Invoice|Date|Payment|Due|GST|Terms).*$/i,'').replace(/\s{2,}.*$/,'').trim();}}
   let desc=g(/Description\s*:\s*(.+)/i);
   if(desc&&/qty|unit price|amount/i.test(desc))desc=null;
-  if(!desc){const dh=lines.findIndex(l=>/description/i.test(l));if(dh>=0){for(let i=dh+1;i<lines.length;i++){let l=lines[i];if(/model:|standard-rated/i.test(l))continue;if(/[A-Za-z]{3}/.test(l)){desc=l.replace(/(\s+(?:SGD\s*)?[\d,]+(?:\.\d{2})?){1,4}\s*$/,'').trim();break;}}}}
-  if(total==null)total=((net||0)+(gst||0))||null;
+  if(!desc){const dh=lines.findIndex(l=>/description/i.test(l));if(dh>=0){for(let i=dh+1;i<lines.length;i++){let l=lines[i];if(/model:|standard-rated/i.test(l))continue;if(/[A-Za-z]{3}/.test(l)){desc=l;break;}}}}
+  if(desc)desc=desc.replace(/\s+[\d ,.]*\d[\d ,.]*$/,'').trim();
   return {supplier,invoiceNo,date,gstReg,net,gst,total,billTo,desc};
 }
 function categorise(desc,net){
