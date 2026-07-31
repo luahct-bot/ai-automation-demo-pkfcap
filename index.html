@@ -110,6 +110,27 @@
   .foot{max-width:1120px;margin:26px auto 0;padding:0 20px;color:var(--muted);font-size:12px;text-align:center}
   .foot .more{color:var(--ink2);margin-bottom:6px}
   .pill{display:inline-block;background:var(--accentbg);color:#0a6b49;border:1px solid #bfe6d5;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em}
+  /* PDF scan / OCR module */
+  .docdrop{margin-bottom:12px}
+  .docwrap{position:relative;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fcfcfa;transition:box-shadow .2s,border-color .2s}
+  .docdrop.drag .docwrap{border-color:var(--navy2);box-shadow:0 0 0 3px rgba(31,92,139,.14)}
+  .docwrap.scanned{box-shadow:0 0 0 2px rgba(23,138,76,.28);border-color:#8fd0ab}
+  .doccorner{position:absolute;top:8px;right:8px;z-index:3;background:#c0392b;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.05em;padding:2px 7px;border-radius:5px}
+  .docpage{margin:0;padding:14px;font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;color:#2a2f36;white-space:pre-wrap;max-height:230px;overflow:auto}
+  .scanline{position:absolute;left:0;right:0;top:-44px;height:40px;z-index:2;background:linear-gradient(180deg,rgba(31,92,139,0)0%,rgba(31,92,139,.16)70%,rgba(31,92,139,.42)100%);border-bottom:2px solid var(--navy2);opacity:0;pointer-events:none}
+  .docwrap.scanning .scanline{opacity:1;animation:scan 1.5s ease-in-out}
+  @keyframes scan{0%{top:-44px}100%{top:100%}}
+  .dropnote{font-size:12px;color:var(--muted);margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .simtag{background:var(--warnbg);color:var(--warn);font-weight:700;font-size:10px;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+  .linkbtn{background:none;border:none;color:var(--navy2);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;padding:0}
+  .ocrhead{font-size:13px;color:var(--ink);margin-bottom:10px}
+  .exgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .exf{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--good);border-radius:8px;padding:7px 10px;animation:pop .3s ease}
+  .exk{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);min-width:58px}
+  .exv{font-size:12px;font-weight:600;color:var(--ink);flex:1}
+  .exc{font-size:10.5px;color:var(--good);font-weight:700;white-space:nowrap}
+  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @media(max-width:640px){.exgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -156,11 +177,15 @@
   <!-- BOOKKEEPING -->
   <div class="card panel active" id="p-book">
     <h2>Bookkeeping — source document to posted journal</h2>
-    <p class="lead">收集资料 → 分类账 → 分录 → 记账. A supplier invoice comes in; AI extracts it, categorises to your chart of accounts, and posts a draft bill/journal straight into Xero or QBO.</p>
+    <p class="lead">收集资料 → 分类账 → 分录 → 记账. A supplier invoice PDF comes in; AI reads it (OCR), extracts the fields, categorises to your chart of accounts, and posts a draft bill/journal straight into Xero or QBO.</p>
     <div class="grid">
       <div>
-        <label>Supplier invoice / receipt (from client)</label>
-        <textarea id="bk-in" rows="12">TAX INVOICE
+        <label>Supplier invoice (PDF from client)</label>
+        <div class="docdrop" id="bk-drop" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="bkDrop(event)">
+          <div class="docwrap" id="bk-docwrap">
+            <div class="scanline"></div>
+            <span class="doccorner">PDF</span>
+            <pre class="docpage" id="bk-doc">TAX INVOICE
 Supplier: Tech Supplies Pte Ltd  (GST Reg: 200812345M)
 Invoice No: TS-8842   Date: 12 Jun 2026
 Bill to: ABC Trading Pte Ltd (your client)
@@ -169,10 +194,13 @@ Description: 3 x Laptop — office use
 Subtotal:        SGD 6,000.00
 GST @ 9%:        SGD   540.00
 Total payable:   SGD 6,540.00
-Terms: 30 days</textarea>
+Terms: 30 days</pre>
+          </div>
+          <div class="dropnote"><span id="bk-dropmsg">📄 Drop a PDF invoice here, or <button type="button" class="linkbtn" onclick="scanInvoice()">scan this sample</button></span> <span class="simtag">simulated OCR + AI</span></div>
+        </div>
         <label>Post to</label>
         <select id="bk-dest"><option>Xero</option><option>QuickBooks Online</option></select>
-        <button class="btn go" id="bk-btn" onclick="runBook()"><span class="spin"></span><span>⚡ Categorise &amp; post</span></button>
+        <button class="btn go" id="bk-btn" onclick="scanInvoice()"><span class="spin"></span><span>⚡ Scan, categorise &amp; post</span></button>
         <div class="cmp">
           <div class="box man"><div class="cl">Manual</div><div class="cn">~8 min</div></div>
           <div class="box ai"><div class="cl">With AI</div><div class="cn">3 sec</div></div>
@@ -373,12 +401,26 @@ function typeInto(el,text,done){el.innerHTML='';let i=0;const c=document.createE
     if(i>=text.length){clearInterval(iv);c.remove();done&&done();}},14);}
 function stagger(out,items,done){items.forEach((h,i)=>setTimeout(()=>{const d=document.createElement('div');d.innerHTML=h;out.appendChild(d.firstElementChild);out.scrollTop=out.scrollHeight;if(i===items.length-1)done&&done();},i*360));}
 
-/* Bookkeeping */
-function runBook(){setLoading('bk-btn',true);const dest=document.getElementById('bk-dest').value;const out=document.getElementById('bk-out');
-  out.innerHTML='<div class="placeholder">Reading invoice &amp; posting…</div>';
-  setTimeout(()=>{setLoading('bk-btn',false);
-    out.innerHTML=`
-    <div class="kv"><b>Extracted:</b> Tech Supplies Pte Ltd · Inv TS-8842 · 12 Jun 2026 · Net SGD 6,000.00 · GST SGD 540.00 (9%) · Total SGD 6,540.00.<br>Client: <b>ABC Trading</b> · Category: <b>Office equipment (capital &gt; SGD 5,000)</b> · GST: <b>input tax claimable</b>.</div>
+/* Bookkeeping — simulated OCR + AI extraction */
+function bkDrop(e){e.preventDefault();const d=document.getElementById('bk-drop');d.classList.remove('drag');
+  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  document.getElementById('bk-dropmsg').innerHTML=f?('📄 Reading <b>'+f.name+'</b> …'):'📄 Reading invoice …';
+  scanInvoice();}
+function scanInvoice(){setLoading('bk-btn',true);
+  const wrap=document.getElementById('bk-docwrap');const out=document.getElementById('bk-out');
+  wrap.classList.remove('scanned');out.innerHTML='<div class="placeholder">📸 Scanning PDF · OCR reading the page…</div>';
+  void wrap.offsetWidth;wrap.classList.add('scanning');
+  setTimeout(()=>{wrap.classList.remove('scanning');wrap.classList.add('scanned');
+    const fields=[['Supplier','Tech Supplies Pte Ltd','99%'],['Invoice No','TS-8842','99%'],['Date','12 Jun 2026','98%'],['Net','SGD 6,000.00','99%'],['GST 9%','SGD 540.00','99%'],['Total','SGD 6,540.00','99%']];
+    out.innerHTML='<div class="ocrhead">🔍 <b>AI read the invoice</b> — fields detected from the PDF:</div><div class="exgrid" id="bk-ex"></div>';
+    const ex=document.getElementById('bk-ex');
+    fields.forEach((f,i)=>setTimeout(()=>{const d=document.createElement('div');d.className='exf';d.innerHTML='<span class="exk">'+f[0]+'</span><span class="exv">'+f[1]+'</span><span class="exc">'+f[2]+' ✓</span>';ex.appendChild(d);},i*170));
+    setTimeout(postJournal,fields.length*170+450);
+  },1550);}
+function postJournal(){const dest=document.getElementById('bk-dest').value;const out=document.getElementById('bk-out');
+  const b=document.createElement('div');
+  b.innerHTML=`
+    <div class="kv" style="margin-top:12px"><b>AI categorisation:</b> client <b>ABC Trading</b> · <b>Office equipment (capital &gt; SGD 5,000)</b> → Fixed Assets · GST <b>input tax claimable</b>.</div>
     <table class="je"><thead><tr><th>Account</th><th>GL</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
       <tr><td>Office Equipment (Fixed Asset)</td><td>1500</td><td class="num">6,000.00</td><td class="num">—</td></tr>
       <tr><td>GST Input Tax</td><td>2110</td><td class="num">540.00</td><td class="num">—</td></tr>
@@ -386,7 +428,7 @@ function runBook(){setLoading('bk-btn',true);const dest=document.getElementById(
       <tr class="tot"><td colspan="2">Totals</td><td class="num">6,540.00</td><td class="num">6,540.00</td></tr>
     </tbody></table>
     <div class="posted"><span class="xdot">${dest==='Xero'?'X':'Q'}</span> Draft bill posted to <b>${dest}</b> — ref TS-8842, awaiting approval. Added to fixed-asset register &amp; capital-allowance schedule.</div>`;
-    showBadge('bk-badge');},550);}
+  out.appendChild(b);showBadge('bk-badge');setLoading('bk-btn',false);}
 
 /* Recon */
 function runRecon(){setLoading('rc-btn',true);const out=document.getElementById('rc-out');
